@@ -1,0 +1,27 @@
+{
+  "name": "epub-downloader",
+  "version": "0.0.1",
+  "description": "Download articles as epub",
+  "engines": {
+    "node": ">=20"
+  },
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "bin": {
+    "epub-downloader": "./index.js"
+  },
+  "keywords": [
+    "epub",
+    "download"
+  ],
+  "author": "uriesk <uriesk@posteo.de>",
+  "license": "AGPL-3.0",
+  "dependencies": {
+    "@lesjoursfr/html-to-epub": "^4.4.2",
+    "@mozilla/readability": "^0.5.0",
+    "dompurify": "^3.2.3",
+    "jsdom": "^25.0.1"
+  }
+}
