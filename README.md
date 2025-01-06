@@ -1,7 +1,7 @@
 # epub Downloader
 
 Downloads websites as epub by using mozillas [Readability.js](https://github.com/mozilla/readability) and [html-to-epub](https://github.com/lesjoursfr/html-to-epub).
-A reference to the source is added as secont chapter.
+A reference to the source is added as second chapter.
 It can save epubs with automatic generated YYYY-MM-DD-title.epub filenames and optionally drop them into subfolders by website name.
 
 ## Installation
@@ -9,7 +9,7 @@ It can save epubs with automatic generated YYYY-MM-DD-title.epub filenames and o
 nodejs with npm needs to be installed
 
 ```
-git clone
+git clone https://github.com/uriesk/epub-downloader.git
 cd epub-downloader
 npm install
 ```
@@ -28,6 +28,7 @@ Usage: node ./index.js [-o output_filename] [-p path] [-s] [url-to-article]
 -o, --output    Filepath for the epub
 -p, --path      Path for the epub, filename will be automatically generated, only effective if -o not given
 -s, --create_subfolders Create subfolders by sitename, only effective if -o not given
+-c, --cover     URL to a cover image
 ```
 
 to see the available options

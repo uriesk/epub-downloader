@@ -30,6 +30,7 @@ function getArgsFromCli() {
           console.log('-o, --output\tFilepath for the epub');
           console.log('-p, --path\tPath for the epub, filename will be automatically generated, only effective if -o not given');
           console.log('-s, --create_subfolders\tCreate subfolders by sitename, only effective if -o not given');
+          console.log('-c, --cover\tURL to a cover image');
           process.exit(0);
         }
         case '-o':
