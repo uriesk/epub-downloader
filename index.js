@@ -3,6 +3,7 @@
 import path from 'path'
 import { fileURLToPath } from 'url'
 import fs from 'fs';
+import { createHash } from 'crypto'
 
 import { Readability } from '@mozilla/readability';
 import { JSDOM } from 'jsdom';
@@ -133,6 +134,7 @@ export async function createEpub(parsedContent, options) {
     }
     output = path.join(pathArg, filename);
   }
+  const hash = createHash('sha256').update(parsedContent.textContent).digest('hex');
 
   const epubOptions = {
     title,
@@ -145,7 +147,7 @@ export async function createEpub(parsedContent, options) {
       data: parsedContent.content,
     }, {
       title: 'References',
-      data: `<p>Published on: <em>${publishedDate.toUTCString()}</em> by <em>${author}</em> at <a href="${options.url}">${siteName}</a>.</p><p>Fetched on: <em>${new Date().toUTCString()}</em>.</p>`
+      data: `<p>Published on: <em><span id="publishedDate">${publishedDate.toUTCString()}</span></em> by <em>${author}</em> at <a id="url" href="${options.url}">${siteName}</a>.</p><p>Fetched on: <em><span id="fetchedDate">${new Date().toUTCString()}</span></em>.</p><p>SHA256 Content Hash: <em><span id="hash">${hash}</span></em></p>`,
     }],
     cover: options.cover,
     hideToC: true,
