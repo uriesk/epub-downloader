@@ -111,8 +111,10 @@ export async function createEpub(parsedContent, options) {
   }
   let siteName = parsedContent.siteName;
   if (!siteName) siteName = new URL(options.url).host;
+  if (siteName.startsWith('www.')) siteName = siteName.substring(4);
+  if (siteName.endsWith('.com')) siteName = siteName.substring(0, siteName.length - 4);
   let author = parsedContent.byline;
-  if (author.startsWith('by ')) author = author.substring(3);
+  if (author?.startsWith('by ')) author = author.substring(3);
   if (!author) author = siteName;
   const publishedDate = parsedContent.publishedTime
     ? new Date(parsedContent.publishedTime) : new Date();
