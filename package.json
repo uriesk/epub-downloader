@@ -1,6 +1,6 @@
 {
   "name": "epub-downloader",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "description": "Download articles as epub",
   "engines": {
     "node": ">=20"
