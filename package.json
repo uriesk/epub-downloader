@@ -19,9 +19,9 @@
   "author": "uriesk <uriesk@posteo.de>",
   "license": "AGPL-3.0",
   "dependencies": {
-    "@lesjoursfr/html-to-epub": "^4.4.2",
     "@mozilla/readability": "^0.5.0",
     "dompurify": "^3.2.3",
-    "jsdom": "^25.0.1"
+    "jsdom": "^25.0.1",
+    "yt-dlp-wrap": "^2.3.12"
   }
 }

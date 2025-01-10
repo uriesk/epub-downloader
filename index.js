@@ -9,6 +9,9 @@ import { Readability } from '@mozilla/readability';
 import { JSDOM } from 'jsdom';
 import DOMPurify from 'dompurify';
 import { EPub } from '@lesjoursfr/html-to-epub';
+import YTDlpWrap from 'yt-dlp-wrap';
+
+const ytDlpWrap = new YTDlpWrap.default();
 
 function isRunAsCli() {
   const nodePassedPath = process.argv[1];
@@ -31,6 +34,8 @@ function getArgsFromCli() {
           console.log('-o, --output\tFilepath for the epub');
           console.log('-p, --path\tPath for the epub, filename will be automatically generated, only effective if -o not given');
           console.log('-s, --create_subfolders\tCreate subfolders by sitename, only effective if -o not given');
+          console.log('-m, --download_media\tDownload embedded youtube videos and include them (yt-dlp needs to be installed and in $PATH)');
+          console.log('-f, --media_format\tFormat string used by yt-dlp, only effective if -m is set');
           console.log('-c, --cover\tURL to a cover image');
           process.exit(0);
         }
@@ -72,6 +77,22 @@ function getArgsFromCli() {
           options.cover = cover;
           break;
         }
+        case '-m':
+        case '--download_media': {
+          options.downloadMedia = true;
+          break;
+        }
+        case '-f':
+        case '--media_format': {
+          i += 1;
+          const mediaFormat = argv[i];
+          if (!mediaFormat || mediaFormat.startsWith('-')) {
+            console.error(`${arg} extects a yt-dlp format string`);
+            process.exit(6);
+          }
+          options.mediaFormat = mediaFormat;
+          break;
+        }
         default: {
           console.error(`Unrecognized option: ${arg}`);
           process.exit(1);
@@ -88,33 +109,110 @@ function getArgsFromCli() {
   return options;
 }
 
+function randomString() {
+  return Math.random().toString(36).substr(2, 10);
+}
+
+function getHostOfUrl(url) {
+  let  host = new URL(url).host;
+  if (host.startsWith('www.')) host = host.substring(4);
+  if (host.endsWith('.com')) host = host.substring(0, host.length - 4);
+  return host;
+}
+
+function getVideo(src, tempFolder, format) {
+  console.log('Downloading video', src);
+  let filepath;
+  do {
+    const filename = randomString() + '.mp4';
+    filepath = path.resolve(tempFolder, filename);
+  } while (fs.existsSync(filepath));
+  return new Promise((resolve, reject) => {
+    ytDlpWrap
+    .exec([
+        src,
+        '-f',
+        format || 'worstvideo[vcodec!*=av01][height>=?420]+bestaudio[acodec!*=opus][abr<120]',
+        '-o',
+        filepath,
+    ])
+    .on('error', reject)
+    .on('close', () => resolve(`file://${filepath}`));
+  });
+}
+
+async function replaceIFrame(document, frame, tempFolder, options) {
+  const src = frame.src;
+  const host = getHostOfUrl(src);
+  let node = frame;
+  /* go to outermost node that has a different sibling */
+  while (node.parentNode.childNodes.length <= 1) {
+    node = node.parentNode;
+  }
+
+  let replacement;
+  const a = document.createElement('a');
+  a.href = src;
+  if (options.downloadMedia && ['youtube', 'youtu.be'].includes(host)) {
+    a.appendChild(document.createTextNode(`Watch on ${host}`));
+    replacement = document.createElement('figure');
+    const video = document.createElement('video');
+    video.appendChild(document.createTextNode('There is video content at this location that is not currently supported on your device.'));
+    video.src = await getVideo(src, tempFolder, options.mediaFormat);
+    video.setAttribute("controls","controls");
+    replacement.appendChild(video);
+    const caption = document.createElement('figcaption');
+    caption.appendChild(a);
+    replacement.appendChild(caption);
+  } else {
+    a.appendChild(document.createTextNode(`Visit ${host}`));
+    replacement = document.createElement('p');
+    replacement.appendChild(a);
+  }
+  node.parentNode.replaceChild(replacement, node);
+}
+
 export async function getDOM(url, purify = false) {
   if (!url) {
     throw new Error('No URL given');
   }
+  console.log('Fetching website.');
   let html = await fetch(url).then((r) => r.text());
+  let window
   /* purify strips too much here, so we default to false */
   if (purify) {
-    const window = new JSDOM('', {url}).window;
+    window = new JSDOM('', {url}).window;
     const purify = DOMPurify(window);
     html = purify.sanitize(html);
   }
   /* create DOM */
-  const doc = new JSDOM(html, {url});
+  window = new JSDOM(html, {url}).window;
   /* parse with readability */
-  const reader = new Readability(doc.window.document);
-  return reader.parse();
+  console.log('Parsing website in reader mode');
+  const reader = new Readability(window.document);
+  const parsedContent = reader.parse();
+  parsedContent.dom = new JSDOM(parsedContent.content, {url}).window;
+  return parsedContent;
 }
 
-export async function createEpub(parsedContent, options) {
+export async function manipulateDOM(parsedContent, tempFolder, options) {
+  console.log('Checking embedded content.');
+  const document = parsedContent.dom.document;
+  for (const f of document.querySelectorAll('iframe')) {
+    await replaceIFrame(document, f, tempFolder, options);
+  }
+  parsedContent.content = parsedContent.dom.document.body.innerHTML;
+  return parsedContent;
+}
+
+export function createEpub(parsedContent, options) {
+  console.log('Creating epub');
   const title = parsedContent.title;
   if (!title) {
     throw new Error('Could not find any title');
   }
   let siteName = parsedContent.siteName;
-  if (!siteName) siteName = new URL(options.url).host;
-  if (siteName.startsWith('www.')) siteName = siteName.substring(4);
-  if (siteName.endsWith('.com')) siteName = siteName.substring(0, siteName.length - 4);
+  if (!siteName) siteName = getHostOfUrl(options.url);
   let author = parsedContent.byline;
   if (author?.startsWith('by ')) author = author.substring(3);
   if (!author) author = siteName;
@@ -157,8 +255,17 @@ export async function createEpub(parsedContent, options) {
 }
 
 async function fetchAsEpub(options) {
-  const dom = await getDOM(options.url);
-  return createEpub(dom, options);
+  const tempFolder = path.resolve('/tmp', `audiovideo-${randomString()}`);
+  if (!fs.existsSync(tempFolder)) {
+    fs.mkdirSync(tempFolder);
+  }
+
+  let parsedContent = await getDOM(options.url);
+  parsedContent = await manipulateDOM(parsedContent, tempFolder, options);
+  await createEpub(parsedContent, options);
+
+  fs.rmSync(tempFolder, { recursive: true, force: true });
+  return;
 }
 
 if (isRunAsCli()) {
