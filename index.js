@@ -154,7 +154,7 @@ async function replaceIFrame(document, frame, tempFolder, options) {
   const a = document.createElement('a');
   a.href = src;
   if (options.downloadMedia && ['youtube', 'youtu.be'].includes(host)) {
-    a.appendChild(document.createTextNode(`Watch on ${host}`));
+    a.appendChild(document.createTextNode(`Watch on ${host}.`));
     replacement = document.createElement('figure');
     const video = document.createElement('video');
     video.appendChild(document.createTextNode('There is video content at this location that is not currently supported on your device.'));
@@ -165,26 +165,20 @@ async function replaceIFrame(document, frame, tempFolder, options) {
     caption.appendChild(a);
     replacement.appendChild(caption);
   } else {
-    a.appendChild(document.createTextNode(`Visit ${host}`));
+    a.appendChild(document.createTextNode(`Visit ${host}.`));
     replacement = document.createElement('p');
     replacement.appendChild(a);
   }
   node.parentNode.replaceChild(replacement, node);
 }
 
-export async function getDOM(url, purify = false) {
+export async function getDOM(url) {
   if (!url) {
     throw new Error('No URL given');
   }
   console.log('Fetching website.');
   let html = await fetch(url).then((r) => r.text());
   let window
-  /* purify strips too much here, so we default to false */
-  if (purify) {
-    window = new JSDOM('', {url}).window;
-    const purify = DOMPurify(window);
-    html = purify.sanitize(html);
-  }
   /* create DOM */
   window = new JSDOM(html, {url}).window;
   /* parse with readability */
@@ -195,13 +189,35 @@ export async function getDOM(url, purify = false) {
   return parsedContent;
 }
 
-export async function manipulateDOM(parsedContent, tempFolder, options) {
+export async function manipulateDOM(parsedContent, tempFolder, options, purify = true) {
   console.log('Checking embedded content.');
+  /* remove iframes */
   const document = parsedContent.dom.document;
   for (const f of document.querySelectorAll('iframe')) {
     await replaceIFrame(document, f, tempFolder, options);
   }
   parsedContent.content = parsedContent.dom.document.body.innerHTML;
+  /* 
+   * purify html, keep file:// links of media elements
+   * cause we might have safed them
+   * */
+  if (purify) {
+    const url = parsedContent.dom.document.location.href;
+    const purify = DOMPurify(new JSDOM('', { url }).window);
+    purify.addHook(
+      'uponSanitizeAttribute',
+      (currentNode, hookEvent, config) => {
+        if (['VIDEO', 'AUDIO', 'IMG', 'IMAGE'].includes(currentNode.tagName)
+          && hookEvent.attrName === 'src'
+          && hookEvent.attrValue.startsWith('file://')
+        ) {
+          hookEvent.forceKeepAttr = true;
+        }
+      }
+    );
+    parsedContent.content = purify.sanitize(parsedContent.content);
+    parsedContent.dom = new JSDOM(parsedContent.content, { url }).window;
+  }
   return parsedContent;
 }
 
