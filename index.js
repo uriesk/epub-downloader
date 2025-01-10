@@ -36,6 +36,7 @@ function getArgsFromCli() {
           console.log('-s, --create_subfolders\tCreate subfolders by sitename, only effective if -o not given');
           console.log('-m, --download_media\tDownload embedded youtube videos and include them (yt-dlp needs to be installed and in $PATH)');
           console.log('-f, --media_format\tFormat string used by yt-dlp, only effective if -m is set');
+          console.log('--media_filesize\tMaximum file size of the media to download in MiB, only effective if -m is set');
           console.log('-c, --cover\tURL to a cover image');
           process.exit(0);
         }
@@ -93,6 +94,16 @@ function getArgsFromCli() {
           options.mediaFormat = mediaFormat;
           break;
         }
+        case '--media_filesize': {
+          i += 1;
+          const targetFileSize = argv[i];
+          if (!targetFileSize || targetFileSize.startsWith('-')) {
+            console.error(`${arg} extects a number as target filesize`);
+            process.exit(6);
+          }
+          options.targetFileSize = targetFileSize;
+          break;
+        }
         default: {
           console.error(`Unrecognized option: ${arg}`);
           process.exit(1);
@@ -120,24 +131,81 @@ function getHostOfUrl(url) {
   return host;
 }
 
-function getVideo(src, tempFolder, format) {
-  console.log('Downloading video', src);
+function getMedia(src, tempFolder, formats, targetFileSize = null, attempt = 0) {
+  const format = formats[attempt];
+  console.log(`Try downloading video  ${src} as: ${format}`);
   let filepath;
   do {
-    const filename = randomString() + '.mp4';
+    const extension = (format.includes('video') || format.includes('best[') || format.includes('b[') || format.includes('bc') || format.includes('wv') || format === 'best')
+      ? '.mp4' : '.m4a';
+    const filename = randomString() + extension;
     filepath = path.resolve(tempFolder, filename);
   } while (fs.existsSync(filepath));
   return new Promise((resolve, reject) => {
+    const controller = new AbortController();
+    let killed = false;
     ytDlpWrap
     .exec([
         src,
         '-f',
-        format || 'worstvideo[vcodec!*=av01][height>=?420]+bestaudio[acodec!*=opus][abr<120]',
+        format,
         '-o',
         filepath,
-    ])
-    .on('error', reject)
-    .on('close', () => resolve(`file://${filepath}`));
+    ], {}, controller.signal)
+    .on('ytDlpEvent', (eventType, eventData) => {
+        if (killed || !targetFileSize || eventType !== 'download') {
+          return;
+        }
+        const stats = eventData.match(/([0-9]+\.[0-9]+)([KMG]iB)/);
+        if (stats?.length !== 3) {
+          return;
+        }
+
+        let multiplier = 1;
+        switch (stats[2]) {
+          case 'KiB':
+            multiplier /= 1024;
+            break;
+          case 'TiB':
+            multiplier *= 1024;
+          case 'GiB':
+            multiplier *= 1024;
+            break;
+        }
+        const fileSize = parseInt(stats[1]) * multiplier;
+        if (fileSize > targetFileSize) {
+          if (attempt + 1 < formats.length) {
+            console.log('File too large');
+            killed = true;
+            controller.abort();
+          }
+        }
+      })
+    .on('error', (err) => {
+        if (err.message.includes('Requested format is not available.')) {
+          attempt += 1;
+          if (attempt < formats.length) {
+            console.log('Format not available.');
+            getMedia(src, tempFolder, formats, targetFileSize, attempt)
+              .then(resolve)
+              .catch(reject);
+            return;
+          }
+        }
+        reject(err);
+      })
+    .on('close', () => {
+        if (killed) {
+          attempt += 1;
+          if (attempt < formats.length) {
+            getMedia(src, tempFolder, formats, targetFileSize, attempt)
+              .then(resolve)
+              .catch(reject);
+            return;
+          }
+        }
+        resolve(`file://${filepath}`);
+      });
   });
 }
 
@@ -156,11 +224,19 @@ async function replaceIFrame(document, frame, tempFolder, options) {
   if (options.downloadMedia && ['youtube', 'youtu.be'].includes(host)) {
     a.appendChild(document.createTextNode(`Watch on ${host}.`));
     replacement = document.createElement('figure');
-    const video = document.createElement('video');
-    video.appendChild(document.createTextNode('There is video content at this location that is not currently supported on your device.'));
-    video.src = await getVideo(src, tempFolder, options.mediaFormat);
-    video.setAttribute("controls","controls");
-    replacement.appendChild(video);
+    const preferedFormats = ['worstvideo[vcodec!*=av01][height>=?420]+bestaudio[acodec!*=opus][abr<120]','worstvideo[vcodec!*=av01][height>=?360]+bestaudio[acodec!*=opus][abr<120]', 'worstvideo+worstaudio'];
+    const filepath = await getMedia(
+      src,
+      tempFolder,
+      (options.mediaFormat && options.mediaFormat.split('_')) || preferedFormats, 
+      options.targetFileSize,
+    );
+    const type = filepath.endsWith('.mp4') ? 'video' : 'audio';
+    const media = document.createElement(type);
+    media.src = filepath;
+    media.appendChild(document.createTextNode(`There is ${type} content at this location that is not currently supported on your device.`));
+    media.setAttribute("controls","controls");
+    replacement.appendChild(media);
     const caption = document.createElement('figcaption');
     caption.appendChild(a);
     replacement.appendChild(caption);
@@ -170,6 +246,45 @@ async function replaceIFrame(document, frame, tempFolder, options) {
     replacement.appendChild(a);
   }
   node.parentNode.replaceChild(replacement, node);
+}
+
+async function checkQuotesForMedia(document, quote, tempFolder, options) {
+  let lastChild;
+  if (!options.downloadMedia
+    || !quote.parentNode
+    ||quote.lastChild?.tagName !== 'P'
+    || quote.lastChild.lastChild?.tagName !== 'A'
+  ) {
+    return;
+  }
+  const url = quote.lastChild.lastChild.href;
+  if (getHostOfUrl(url) !== 'twitter') {
+    return;
+  }
+  /* we don't know if the tweet includes a video, we just try */
+  try {
+    const preferedFormats = ['worstvideo[vcodec!*=av01][height>=?420]+bestaudio[abr<120]', 'worstvideo+worstaudio', 'bestaudio[abr<120]'];
+    const filepath = await getMedia(
+      url,
+      tempFolder,
+      (options.mediaFormat && options.mediaFormat.split('_')) || preferedFormats,
+      options.targetFileSize,
+    );
+    const type = filepath.endsWith('.mp4') ? 'video' : 'audio';
+    const media = document.createElement(type);
+    const p = document.createElement('p');
+    media.src = filepath;
+    media.setAttribute("controls","controls");
+    p.appendChild(media);
+    if (quote.nextSibling) {
+      quote.parentNode.insertBefore(p, quote.nextSibling);
+    } else {
+      quote.parentNode.appendChild(p);
+    }
+  } catch (err) {
+    console.log(err.message);
+    return;
+  }
 }
 
 export async function getDOM(url) {
@@ -191,10 +306,14 @@ export async function getDOM(url) {
 
 export async function manipulateDOM(parsedContent, tempFolder, options, purify = true) {
   console.log('Checking embedded content.');
-  /* remove iframes */
   const document = parsedContent.dom.document;
+  /* remove iframes */
   for (const f of document.querySelectorAll('iframe')) {
     await replaceIFrame(document, f, tempFolder, options);
+  }
+  /* get videos from twitter blockquotes */
+  for (const q of document.querySelectorAll('blockquote')) {
+    await checkQuotesForMedia(document, q, tempFolder, options);
   }
   parsedContent.content = parsedContent.dom.document.body.innerHTML;
   /* 
