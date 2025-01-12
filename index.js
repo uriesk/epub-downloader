@@ -227,13 +227,22 @@ async function fetchAsEpub(options) {
   if (!fs.existsSync(options.tempInstanceDir)) {
     fs.mkdirSync(options.tempInstanceDir);
   }
+  const cleanup = () => {
+    console.log('Cleaning up');
+    fs.rmSync(options.tempInstanceDir, { recursive: true, force: true });
+    process.exit(0);
+  };
+  process.on('SIGINT', cleanup);
+  process.on('SIGTERM', cleanup);
 
-  let parsedContent = await getDOM(options.url);
-  parsedContent = await manipulateDOM(parsedContent, options);
-  const filepath = await createEpub(parsedContent, options);
-  await fixZip(filepath, options.tempInstanceDir).catch(() =>{});
-
-  fs.rmSync(options.tempInstanceDir, { recursive: true, force: true });
+  try {
+    let parsedContent = await getDOM(options.url);
+    parsedContent = await manipulateDOM(parsedContent, options);
+    const filepath = await createEpub(parsedContent, options);
+    await fixZip(filepath, options.tempInstanceDir).catch(() =>{});
+  } finally {
+    cleanup();
+  }
   return;
 }
 
