@@ -11,7 +11,7 @@ It can save epubs with automatic generated YYYY-MM-DD-title.epub filenames and o
 nodejs with npm needs to be installed
 
 ```
-npm install -g uriesk/epub-downloader
+npm install -g epub-downloader
 ```
 
 ## Usage
