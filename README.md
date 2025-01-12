@@ -1,7 +1,9 @@
 # epub Downloader
 
-Downloads websites as epub by using mozillas [Readability.js](https://github.com/mozilla/readability) and [html-to-epub](https://github.com/lesjoursfr/html-to-epub).
-A reference to the source is added as second chapter.
+![example epub](./screenshot.png)
+
+Downloads websites as easily readable epub.
+Includes images and if yt-dlp is available, **also embedded youtube videos**. A reference to the source is added as second chapter.
 It can save epubs with automatic generated YYYY-MM-DD-title.epub filenames and optionally drop them into subfolders by website name.
 
 ## Installation
@@ -9,44 +11,36 @@ It can save epubs with automatic generated YYYY-MM-DD-title.epub filenames and o
 nodejs with npm needs to be installed
 
 ```
-git clone https://github.com/uriesk/epub-downloader.git
-cd epub-downloader
-npm install
+npm install -g uriesk/epub-downloader
 ```
 
 ## Usage
 
-Inside the epub-downloader folder do
-
 ```
-node index.js --help
-```
-
-```
-Usage: node ./index.js [-o output_filename] [-p path] [-s] [url-to-article]
+Usage: epub-downloader [-o output_filename] [-p path] [-s] [url-to-article]
 
 -o, --output    Filepath for the epub
 -p, --path      Path for the epub, filename will be automatically generated, only effective if -o not given
 -s, --create_subfolders Create subfolders by sitename, only effective if -o not given
+-m, --download_media    Download embedded youtube videos and include them (yt-dlp needs to be installed and in $PATH)
+-f, --media_format      Format string used by yt-dlp, only effective if -m is set
+--media_filesize        Maximum file size of the media to download in MiB, only effective if -m is set
 -c, --cover     URL to a cover image
 ```
 
-to see the available options
+Use `epub-downloader --help` to see the available options.
 
 ### Example
 
 ```
-node index.js https://0pointer.net/blog/linux-boot-partitions.html
+epub-downloader https://0pointer.net/blog/linux-boot-partitions.html
 ```
 
 Will store the article as `2025-01-06_linux-boot-partitions.epub` file into the current directory.
 
 ```
-node index.js -s https://0pointer.net/blog/linux-boot-partitions.html
+epub-downloader -s https://0pointer.net/blog/linux-boot-partitions.html
 ```
 
 Will store the article under the subfolder `./0pointer.net/2025-01-06_linux-boot-partitions.epub` within the current directory. Directory can be changed with the `-p` option.
 
-## Why is this not published on npm?
-
-It is only one simple script. In case of broader interest it will be published.

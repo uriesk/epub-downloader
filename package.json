@@ -5,14 +5,15 @@
   "engines": {
     "node": ">=20"
   },
+  "repository": "https://github.com/uriesk/epub-downloader",
+  "homepage": "https://github.com/uriesk/epub-downloader",
   "type": "module",
   "scripts": {
-    "start": "node index.js"
+    "start": "node cli.js"
   },
-  "bin": {
-    "epub-downloader": "./index.js"
-  },
+  "bin": "./cli.js",
   "keywords": [
+    "cli",
     "epub",
     "download"
   ],

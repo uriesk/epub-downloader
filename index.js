@@ -1,5 +1,3 @@
-#!/usr/bin/env node
-
 import path from 'path'
 import fs from 'fs';
 import { createHash } from 'crypto'
@@ -11,7 +9,6 @@ import DOMPurify from 'dompurify';
 
 import getMedia from './src/yt-dlp.js';
 import { EPub } from './src/html-to-epub.js';
-import getArgsFromCli from './src/parse-args.js';
 import {
   getHostOfUrl,
   uuid,
@@ -20,14 +17,6 @@ import {
 }from './src/utils.js';
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
-
-export function isRunAsCli() {
-  const nodePassedPath = process.argv[1];
-  if (!nodePassedPath) return false;
-  const pathPassedToNode = path.resolve(nodePassedPath)
-  const pathToThisFile = path.resolve(fileURLToPath(import.meta.url));
-  return pathToThisFile.includes(pathPassedToNode)
-}
 
 async function replaceIFrame(document, frame, options) {
   const tempFolder = options.tempInstanceDir;
@@ -217,6 +206,9 @@ export async function createEpub(parsedContent, options) {
 }
 
 async function fetchAsEpub(options) {
+  if (!options.url) {
+    return false;
+  }
   if (!options.tempDir) {
     options.tempDir = path.resolve(__dirname, 'tmp');
   }
@@ -228,30 +220,31 @@ async function fetchAsEpub(options) {
     fs.mkdirSync(options.tempInstanceDir);
   }
   const cleanup = () => {
-    console.log('Cleaning up');
     fs.rmSync(options.tempInstanceDir, { recursive: true, force: true });
-    process.exit(0);
   };
-  process.on('SIGINT', cleanup);
-  process.on('SIGTERM', cleanup);
+  process.on('SIGINT', () => {
+    console.log('Cleaning up...');
+    cleanup();
+    process.exit(128);
+  });
+  process.on('SIGTERM', () => {
+    console.log('Cleaning up...');
+    cleanup();
+    process.exit(128);
+  });
 
   try {
     let parsedContent = await getDOM(options.url);
     parsedContent = await manipulateDOM(parsedContent, options);
     const filepath = await createEpub(parsedContent, options);
     await fixZip(filepath, options.tempInstanceDir).catch(() =>{});
-  } finally {
-    cleanup();
-  }
-  return;
-}
-
-if (isRunAsCli()) {
-  const options = getArgsFromCli();
-  fetchAsEpub(options).catch((err) => {
+  } catch (err) {
     console.error(err.message);
-    process.exit(255);
-  });
+    cleanup();
+    return false
+  }
+  cleanup();
+  return true;
 }
 
 export default fetchAsEpub;
