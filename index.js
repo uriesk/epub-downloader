@@ -3,6 +3,7 @@
 import path from 'path'
 import { fileURLToPath } from 'url'
 import fs from 'fs';
+import { spawn } from 'child_process';
 import { createHash } from 'crypto'
 
 import { Readability } from '@mozilla/readability';
@@ -342,7 +343,7 @@ export async function manipulateDOM(parsedContent, tempFolder, options, purify =
   return parsedContent;
 }
 
-export function createEpub(parsedContent, options) {
+export async function createEpub(parsedContent, options) {
   console.log('Creating epub');
   const title = parsedContent.title;
   if (!title) {
@@ -376,6 +377,7 @@ export function createEpub(parsedContent, options) {
     author,
     publisher: siteName,
     output,
+    firstImageIsCover: true,
     lang: parsedContent.lang?.substring(0, 2),
     content: [{
       title,
@@ -388,7 +390,27 @@ export function createEpub(parsedContent, options) {
     hideToC: true,
   };
   const epub = new EPub(epubOptions, output);
-  return epub.render();
+  await epub.render();
+  return output;
+}
+
+export function fixZip(filepath, tempFolder) {
+  return new Promise((resolve, reject) => {
+    const tempFile = path.resolve(tempFolder, 'fix.zip');
+    const zipProcess = spawn('zip', ['-F', filepath, '--out', tempFile]);
+    zipProcess.stdout.on('data', function(msg){
+        console.log(msg.toString());
+    });
+    zipProcess.on('error', reject);
+    zipProcess.on('close', (code) => {
+      if (code === 0) {
+        fs.copyFileSync(tempFile, filepath);
+        resolve();
+      } else {
+        reject(new Error('zip -F failed'));
+      }
+    });
+  });
 }
 
 async function fetchAsEpub(options) {
@@ -399,7 +421,8 @@ async function fetchAsEpub(options) {
 
   let parsedContent = await getDOM(options.url);
   parsedContent = await manipulateDOM(parsedContent, tempFolder, options);
-  await createEpub(parsedContent, options);
+  const filepath = await createEpub(parsedContent, options);
+  await fixZip(filepath, tempFolder).catch(() =>{});
 
   fs.rmSync(tempFolder, { recursive: true, force: true });
   return;
