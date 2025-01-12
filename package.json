@@ -20,8 +20,16 @@
   "license": "AGPL-3.0",
   "dependencies": {
     "@mozilla/readability": "^0.5.0",
+    "archiver": "^7.0.1",
     "dompurify": "^3.2.3",
+    "ejs": "^3.1.10",
+    "entities": "^6.0.0",
+    "image-size": "^1.2.0",
     "jsdom": "^25.0.1",
-    "yt-dlp-wrap": "^2.3.12"
+    "mime": "^4.0.6",
+    "rehype-parse": "^9.0.1",
+    "rehype-stringify": "^10.0.1",
+    "unified": "^11.0.5",
+    "unist-util-visit": "^5.0.0"
   }
 }

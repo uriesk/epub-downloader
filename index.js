@@ -1,20 +1,27 @@
 #!/usr/bin/env node
 
 import path from 'path'
-import { fileURLToPath } from 'url'
 import fs from 'fs';
-import { spawn } from 'child_process';
 import { createHash } from 'crypto'
+import { fileURLToPath } from "url";
 
 import { Readability } from '@mozilla/readability';
 import { JSDOM } from 'jsdom';
 import DOMPurify from 'dompurify';
-import { EPub } from '@lesjoursfr/html-to-epub';
-import YTDlpWrap from 'yt-dlp-wrap';
 
-const ytDlpWrap = new YTDlpWrap.default();
+import getMedia from './src/yt-dlp.js';
+import { EPub } from './src/html-to-epub.js';
+import getArgsFromCli from './src/parse-args.js';
+import {
+  getHostOfUrl,
+  uuid,
+  slug,
+  fixZip,
+}from './src/utils.js';
 
-function isRunAsCli() {
+const __dirname = fileURLToPath(new URL(".", import.meta.url));
+
+export function isRunAsCli() {
   const nodePassedPath = process.argv[1];
   if (!nodePassedPath) return false;
   const pathPassedToNode = path.resolve(nodePassedPath)
@@ -22,195 +29,8 @@ function isRunAsCli() {
   return pathToThisFile.includes(pathPassedToNode)
 }
 
-function getArgsFromCli() {
-  const options = {};
-  const { argv } = process;
-  for (let i = 2; i < argv.length; i += 1) {
-    const arg = argv[i];
-    if (arg.startsWith('-')) {
-      switch (arg) {
-        case '-h':
-        case '--help': {
-          console.log('Usage: node ./index.js [-o output_filename] [-p path] [-s] [url-to-article]\n');
-          console.log('-o, --output\tFilepath for the epub');
-          console.log('-p, --path\tPath for the epub, filename will be automatically generated, only effective if -o not given');
-          console.log('-s, --create_subfolders\tCreate subfolders by sitename, only effective if -o not given');
-          console.log('-m, --download_media\tDownload embedded youtube videos and include them (yt-dlp needs to be installed and in $PATH)');
-          console.log('-f, --media_format\tFormat string used by yt-dlp, only effective if -m is set');
-          console.log('--media_filesize\tMaximum file size of the media to download in MiB, only effective if -m is set');
-          console.log('-c, --cover\tURL to a cover image');
-          process.exit(0);
-        }
-        case '-o':
-        case '--output': {
-          i += 1;
-          const output = argv[i];
-          if (!output || output.startsWith('-')) {
-            console.error(`${arg} expects a filename`);
-            process.exit(3);
-          }
-          options.output = output;
-          break;
-        }
-        case '-p':
-        case '--path': {
-          i += 1;
-          const pathArg = argv[i];
-          if (!pathArg || pathArg.startsWith('-')) {
-            console.error(`${arg} extects a path`);
-            process.exit(4);
-          }
-          options.path = pathArg;
-          break;
-        }
-        case '-s':
-        case '--create_subfolders': {
-          options.createSubfolders = true;
-          break;
-        }
-        case '-c':
-        case '--cover': {
-          i += 1;
-          const cover = argv[i];
-          if (!cover || cover.startsWith('-')) {
-            console.error(`${arg} extects a URL to a cover image`);
-            process.exit(5);
-          }
-          options.cover = cover;
-          break;
-        }
-        case '-m':
-        case '--download_media': {
-          options.downloadMedia = true;
-          break;
-        }
-        case '-f':
-        case '--media_format': {
-          i += 1;
-          const mediaFormat = argv[i];
-          if (!mediaFormat || mediaFormat.startsWith('-')) {
-            console.error(`${arg} extects a yt-dlp format string`);
-            process.exit(6);
-          }
-          options.mediaFormat = mediaFormat;
-          break;
-        }
-        case '--media_filesize': {
-          i += 1;
-          const targetFileSize = argv[i];
-          if (!targetFileSize || targetFileSize.startsWith('-')) {
-            console.error(`${arg} extects a number as target filesize`);
-            process.exit(6);
-          }
-          options.targetFileSize = targetFileSize;
-          break;
-        }
-        default: {
-          console.error(`Unrecognized option: ${arg}`);
-          process.exit(1);
-        }
-      }
-    } else {
-      if (options.url) {
-        console.error(`Ambigious argument: ${arg}`);
-        process.exit(2);
-      }
-      options.url = arg;
-    }
-  }
-  return options;
-}
-
-function randomString() {
-  return Math.random().toString(36).substr(2, 10);
-}
-
-function getHostOfUrl(url) {
-  let  host = new URL(url).host;
-  if (host.startsWith('www.')) host = host.substring(4);
-  if (host.endsWith('.com')) host = host.substring(0, host.length - 4);
-  return host;
-}
-
-function getMedia(src, tempFolder, formats, targetFileSize = null, attempt = 0) {
-  const format = formats[attempt];
-  console.log(`Try downloading video  ${src} as: ${format}`);
-  let filepath;
-  do {
-    const extension = (format.includes('video') || format.includes('best[') || format.includes('b[') || format.includes('bc') || format.includes('wv') || format === 'best')
-      ? '.mp4' : '.m4a';
-    const filename = randomString() + extension;
-    filepath = path.resolve(tempFolder, filename);
-  } while (fs.existsSync(filepath));
-  return new Promise((resolve, reject) => {
-    const controller = new AbortController();
-    let killed = false;
-    ytDlpWrap
-    .exec([
-        src,
-        '-f',
-        format,
-        '-o',
-        filepath,
-    ], {}, controller.signal)
-    .on('ytDlpEvent', (eventType, eventData) => {
-        if (killed || !targetFileSize || eventType !== 'download') {
-          return;
-        }
-        const stats = eventData.match(/([0-9]+\.[0-9]+)([KMG]iB)/);
-        if (stats?.length !== 3) {
-          return;
-        }
-
-        let multiplier = 1;
-        switch (stats[2]) {
-          case 'KiB':
-            multiplier /= 1024;
-            break;
-          case 'TiB':
-            multiplier *= 1024;
-          case 'GiB':
-            multiplier *= 1024;
-            break;
-        }
-        const fileSize = parseInt(stats[1]) * multiplier;
-        if (fileSize > targetFileSize) {
-          if (attempt + 1 < formats.length) {
-            console.log('File too large');
-            killed = true;
-            controller.abort();
-          }
-        }
-      })
-    .on('error', (err) => {
-        if (err.message.includes('Requested format is not available.')) {
-          attempt += 1;
-          if (attempt < formats.length) {
-            console.log('Format not available.');
-            getMedia(src, tempFolder, formats, targetFileSize, attempt)
-              .then(resolve)
-              .catch(reject);
-            return;
-          }
-        }
-        reject(err);
-      })
-    .on('close', () => {
-        if (killed) {
-          attempt += 1;
-          if (attempt < formats.length) {
-            getMedia(src, tempFolder, formats, targetFileSize, attempt)
-              .then(resolve)
-              .catch(reject);
-            return;
-          }
-        }
-        resolve(`file://${filepath}`);
-      });
-  });
-}
-
-async function replaceIFrame(document, frame, tempFolder, options) {
+async function replaceIFrame(document, frame, options) {
+  const tempFolder = options.tempInstanceDir;
   const src = frame.src;
   const host = getHostOfUrl(src);
   let node = frame;
@@ -250,7 +70,8 @@ async function replaceIFrame(document, frame, tempFolder, options) {
   node.parentNode.replaceChild(replacement, node);
 }
 
-async function checkQuotesForMedia(document, quote, tempFolder, options) {
+async function checkQuotesForMedia(document, quote, options) {
+  const tempFolder = options.tempInstanceDir;
   let lastChild;
   if (!options.downloadMedia
     || !quote.parentNode
@@ -307,16 +128,16 @@ export async function getDOM(url) {
   return parsedContent;
 }
 
-export async function manipulateDOM(parsedContent, tempFolder, options, purify = true) {
+export async function manipulateDOM(parsedContent, options, purify = true) {
   console.log('Checking embedded content.');
   const document = parsedContent.dom.document;
   /* remove iframes */
   for (const f of document.querySelectorAll('iframe')) {
-    await replaceIFrame(document, f, tempFolder, options);
+    await replaceIFrame(document, f, options);
   }
   /* get videos from twitter blockquotes */
   for (const q of document.querySelectorAll('blockquote')) {
-    await checkQuotesForMedia(document, q, tempFolder, options);
+    await checkQuotesForMedia(document, q, options);
   }
   parsedContent.content = parsedContent.dom.document.body.innerHTML;
   /* 
@@ -359,7 +180,7 @@ export async function createEpub(parsedContent, options) {
   let output = options.output;
   if (!output) {
     const datestring = `${publishedDate.getUTCFullYear()}-${`0${publishedDate.getUTCMonth() + 1}`.slice(-2)}-${`0${publishedDate.getUTCDate()}`.slice(-2)}`
-    const titlestring = title.replaceAll(' ', '-').toLowerCase().replace(/[^0-9a-z-_]/g, '').substring(0, 255 - 5 - 11);
+    const titlestring = slug(title, 5 + 11);
     const filename = `${datestring}_${titlestring}.epub`;
     let pathArg = options.path || '.';
     if (options.createSubfolders && siteName) {
@@ -387,6 +208,7 @@ export async function createEpub(parsedContent, options) {
       data: `<p>Published on: <em><span id="publishedDate">${publishedDate.toUTCString()}</span></em> by <em>${author}</em> at <a id="url" href="${options.url}">${siteName}</a>.</p><p>Fetched on: <em><span id="fetchedDate">${new Date().toUTCString()}</span></em>.</p><p>SHA256 Content Hash: <em><span id="hash">${hash}</span></em></p>`,
     }],
     cover: options.cover,
+    tempDir: options.tempInstanceDir,
     hideToC: true,
   };
   const epub = new EPub(epubOptions, output);
@@ -394,37 +216,24 @@ export async function createEpub(parsedContent, options) {
   return output;
 }
 
-export function fixZip(filepath, tempFolder) {
-  return new Promise((resolve, reject) => {
-    const tempFile = path.resolve(tempFolder, 'fix.zip');
-    const zipProcess = spawn('zip', ['-F', filepath, '--out', tempFile]);
-    zipProcess.stdout.on('data', function(msg){
-        console.log(msg.toString());
-    });
-    zipProcess.on('error', reject);
-    zipProcess.on('close', (code) => {
-      if (code === 0) {
-        fs.copyFileSync(tempFile, filepath);
-        resolve();
-      } else {
-        reject(new Error('zip -F failed'));
-      }
-    });
-  });
-}
-
 async function fetchAsEpub(options) {
-  const tempFolder = path.resolve('/tmp', `audiovideo-${randomString()}`);
-  if (!fs.existsSync(tempFolder)) {
-    fs.mkdirSync(tempFolder);
+  if (!options.tempDir) {
+    options.tempDir = path.resolve(__dirname, 'tmp');
+  }
+  if (!fs.existsSync(options.tempDir)) {
+    fs.mkdirSync(options.tempDir);
+  }
+  options.tempInstanceDir = path.resolve(options.tempDir, uuid());
+  if (!fs.existsSync(options.tempInstanceDir)) {
+    fs.mkdirSync(options.tempInstanceDir);
   }
 
   let parsedContent = await getDOM(options.url);
-  parsedContent = await manipulateDOM(parsedContent, tempFolder, options);
+  parsedContent = await manipulateDOM(parsedContent, options);
   const filepath = await createEpub(parsedContent, options);
-  await fixZip(filepath, tempFolder).catch(() =>{});
+  await fixZip(filepath, options.tempInstanceDir).catch(() =>{});
 
-  fs.rmSync(tempFolder, { recursive: true, force: true });
+  fs.rmSync(options.tempInstanceDir, { recursive: true, force: true });
   return;
 }
 
