@@ -8,12 +8,6 @@
         <dc:publisher><%= publisher || "anonymous" %></dc:publisher>
         <dc:date><%= date.toISOString() %></dc:date>
         <dc:rights>Copyright &#x00A9; <%= (new Date()).getFullYear() %> by <%= publisher || "anonymous" %></dc:rights>
-        <meta property="dcterms:title" id="meta-title"><%= title %></meta>
-        <meta property="dcterms:identifier" id="meta-identifier">BookId</meta>
-        <meta property="dcterms:language" id="meta-language"><%= lang || "en" %></meta>
-        <meta property="dcterms:publisher"><%= publisher || "anonymous" %></meta>
-        <meta property="dcterms:date"><%= date.toISOString() %></meta>
-        <meta property="dcterms:rights">All rights reserved</meta>
         <meta property="dcterms:modified"><%= (new Date()).toISOString().split(".")[0]+ "Z" %></meta>
         <% if(locals.cover || (locals.firstImageIsCover && images.length)) { %><meta name="cover" content="<%= locals.cover ? 'image_cover' : 'image_0' %>"/><% } %>
         <meta name="generator" content="epub-gen" />
