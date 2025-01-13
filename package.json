@@ -1,17 +1,22 @@
 {
   "name": "epub-downloader",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Download articles as epub",
   "engines": {
     "node": ">=20"
   },
-  "repository": "https://github.com/uriesk/epub-downloader",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/uriesk/epub-downloader.git"
+  },
   "homepage": "https://github.com/uriesk/epub-downloader",
   "type": "module",
   "scripts": {
     "start": "node cli.js"
   },
-  "bin": "./cli.js",
+  "bin": {
+    "epub-downloader": "cli.js"
+  },
   "keywords": [
     "cli",
     "epub",
@@ -21,12 +26,12 @@
   "license": "AGPL-3.0",
   "dependencies": {
     "@mozilla/readability": "^0.5.0",
-    "archiver": "^7.0.1",
     "dompurify": "^3.2.3",
     "ejs": "^3.1.10",
     "entities": "^6.0.0",
     "image-size": "^1.2.0",
     "jsdom": "^25.0.1",
+    "jszip": "^3.10.1",
     "mime": "^4.0.6",
     "rehype-parse": "^9.0.1",
     "rehype-stringify": "^10.0.1",

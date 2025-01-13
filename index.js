@@ -237,7 +237,10 @@ async function fetchAsEpub(options) {
     let parsedContent = await getDOM(options.url);
     parsedContent = await manipulateDOM(parsedContent, options);
     const filepath = await createEpub(parsedContent, options);
-    await fixZip(filepath, options.tempInstanceDir).catch(() =>{});
+    /* fixZip uses the zip shell utility to rewrite the file
+      * it can be useful when the node zipping out is questionable
+      */
+    // await fixZip(filepath, options.tempInstanceDir).catch(() =>{});
   } catch (err) {
     console.error(err.message);
     cleanup();

@@ -6,7 +6,7 @@
  *
  */
 
-import archiver from "archiver";
+import JSZip from "jszip";
 import { renderFile } from "ejs";
 import { encodeXML } from "entities";
 import {
@@ -18,9 +18,11 @@ import {
   unlinkSync,
   writeFileSync,
   copyFileSync,
+  readdirSync,
   renameSync,
   rmSync,
 } from "fs";
+import { pipeline } from 'stream/promises';
 import { imageSize } from "image-size";
 import mime from "mime";
 import path from "path";
@@ -297,27 +299,31 @@ export class EPub {
       mkdirSync(this.tempDir);
     }
     mkdirSync(this.tempEpubDir);
-    mkdirSync(path.resolve(this.tempEpubDir, "./OEBPS"));
-    if (this.verbose) {
-      console.log("Downloading Media...");
+    try {
+      mkdirSync(path.resolve(this.tempEpubDir, "./OEBPS"));
+      if (this.verbose) {
+        console.log("Downloading Media...");
+      }
+      await this.downloadAllMedia(this.images, this.audioVideo);
+      if (this.verbose) {
+        console.log("Making Cover...");
+      }
+      await this.makeCover();
+      if (this.verbose) {
+        console.log("Generating Template Files.....");
+      }
+      await this.generateTempFile(this.content);
+      if (this.verbose) {
+        console.log("Generating Epub Files...");
+      }
+      await this.generate();
+      if (this.verbose) {
+        console.log("Done.");
+      }
+      return { result: "ok" };
+    } finally {
+      rmSync(this.tempEpubDir, { recursive: true, force: true });
     }
-    await this.downloadAllMedia(this.images, this.audioVideo);
-    if (this.verbose) {
-      console.log("Making Cover...");
-    }
-    await this.makeCover();
-    if (this.verbose) {
-      console.log("Generating Template Files.....");
-    }
-    await this.generateTempFile(this.content);
-    if (this.verbose) {
-      console.log("Generating Epub Files...");
-    }
-    await this.generate();
-    if (this.verbose) {
-      console.log("Done.");
-    }
-    return { result: "ok" };
   }
 
   async generateTempFile(contents) {
@@ -360,19 +366,6 @@ export class EPub {
           escape: (markup) => markup,
         });
       writeFileSync(content.filePath, result);
-    }
-    // write meta-inf/container.xml
-    mkdirSync(this.tempEpubDir + "/META-INF");
-    writeFileSync(`${this.tempEpubDir}/META-INF/container.xml`, '<?xml version="1.0" encoding="UTF-8" ?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>');
-    if (this.version === 2) {
-      // write meta-inf/com.apple.ibooks.display-options.xml [from pedrosanta:xhtml#6]
-      writeFileSync(`${this.tempEpubDir}/META-INF/com.apple.ibooks.display-options.xml`, `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<display_options>
-<platform name="*">
-<option name="specified-fonts">true</option>
-</platform>
-</display_options>
-`);
     }
     const opfPath = this.customOpfTemplatePath || path.resolve(__dirname, `../templates/epub${this.version}/content.opf.ejs`);
     if (!existsSync(opfPath)) {
@@ -461,28 +454,56 @@ export class EPub {
     // or Gist:
     // https://gist.github.com/cyrilis/8d48eef37fbc108869ac32eb3ef97bca
     const cwd = this.tempEpubDir;
-    return new Promise((resolve, reject) => {
-      const archive = archiver("zip", { zlib: { level: 9 } });
-      const output = createWriteStream(this.output);
-      if (this.verbose) {
-        console.log("Zipping temp dir to", this.output);
-      }
-      archive.append("application/epub+zip", { store: true, name: "mimetype" });
-      archive.directory(cwd + "/META-INF", "META-INF");
-      archive.directory(cwd + "/OEBPS", "OEBPS");
-      archive.pipe(output);
-      archive.on("end", () => {
-        if (this.verbose) {
-          console.log("Done zipping, clearing temp dir...");
-        }
-        output.end(() => {
-          rmSync(cwd, { recursive: true, force: true });
-          resolve();
-        });
-      });
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      archive.on("error", (err) => reject(err));
-      archive.finalize();
+
+    const zip = new JSZip();
+    zip.file('mimetype', 'application/epub+zip', {
+      compression: 'STORE',
     });
+    const metaInfFolder = zip.folder('META-INF');
+    const oebpsFolder = zip.folder('OEBPS');
+    metaInfFolder.file(
+      'container.xml',
+      '<?xml version="1.0" encoding="UTF-8" ?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>',
+    );
+    if (this.version === 2) {
+      // write meta-inf/com.apple.ibooks.display-options.xml [from pedrosanta:xhtml#6]
+      metaInfFolder.file(
+        'com.apple.ibooks.display-options.xml',
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><display_options><platform name="*"><option name="specified-fonts">true</option></platform></display_options>',
+      );
+    }
+    const appendDirectory = (dir, zip) => {
+      const files = readdirSync(dir, {
+        withFileTypes: true,
+      });
+
+      for (const file of files) {
+        const filename = file.name;
+        const filepath = path.resolve(file.path, file.name);
+        if (file.isDirectory()) {
+          appendDirectory(filepath, zip.folder(filename));
+        } else {
+          const filetype = mime.getType(filename);
+          // compress files that are already assumed to be compressed less
+          const level =(['audio', 'video', 'image'].some((t) => filetype.startsWith(t))) ? 3 : 9;
+          zip.file(filename, readFileSync(filepath), {
+            compression: 'DEFLATE',
+            compressionOptions: {
+              level,
+            },
+          });
+        }
+      }
+    };
+    appendDirectory(path.resolve(cwd, 'OEBPS'), oebpsFolder);
+
+    const zipStream = zip.generateNodeStream({
+      compression: "DEFLATE",
+      compressionOptions: {
+        level: 9,
+      },
+    });
+
+    return pipeline(zipStream, createWriteStream(this.output));
   }
 }
