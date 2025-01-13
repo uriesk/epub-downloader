@@ -47,6 +47,7 @@ export class EPub {
   uuid;
   title;
   description;
+  source;
   cover;
   firstImageIsCover;
   coverMediaType;
@@ -85,6 +86,7 @@ export class EPub {
     this.uuid = uuid();
     // Required options
     this.title = options.title;
+    this.source = options.source;
     this.description = options.description;
     this.output = output;
     // Options with defaults
@@ -283,6 +285,7 @@ export class EPub {
         title: content.title,
         data: html,
         url: content.url ?? null,
+        type: (this.version !== 2) ? (content.type || 'part bodymatter') : null,
         author: content.author ? (typeof content.author === "string" ? [content.author] : content.author) : [],
         filePath,
         templatePath: contentTemplatePath,
@@ -331,12 +334,10 @@ export class EPub {
     const docHeader = this.version === 2
       ? `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml" lang="${this.lang}">
-`
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="${this.lang}" lang="${this.lang}">`
       : `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" lang="${this.lang}">
-`;
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="${this.lang}" lang="${this.lang}">`;
     // Copy the CSS style
     if (!this.css) {
       this.css = readFileSync(path.resolve(__dirname, "../templates/template.css"), { encoding: "utf8" });

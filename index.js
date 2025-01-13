@@ -193,6 +193,9 @@ export async function createEpub(parsedContent, options) {
     author,
     publisher: siteName,
     output,
+    source: options.url,
+    date: publishedDate,
+    description: parsedContent.excerpt,
     firstImageIsCover: true,
     lang: parsedContent.lang?.substring(0, 2),
     content: [{
@@ -201,6 +204,7 @@ export async function createEpub(parsedContent, options) {
     }, {
       title: 'References',
       data: `<p>Published on: <em><span id="publishedDate">${publishedDate.toUTCString()}</span></em> by <em>${author}</em> at <a id="url" href="${options.url}">${siteName}</a>.</p><p>Fetched on: <em><span id="fetchedDate">${new Date().toUTCString()}</span></em>.</p><p>SHA256 Content Hash: <em><span id="hash">${hash}</span></em></p>`,
+      type: 'backmatter appendix',
     }],
     cover: options.cover,
     tempDir: options.tempInstanceDir,

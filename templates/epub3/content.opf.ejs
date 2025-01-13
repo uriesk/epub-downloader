@@ -1,26 +1,28 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="BookId" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xml:lang="en" xmlns:media="http://www.idpf.org/epub/vocab/overlays/#" prefix="ibooks: http://vocabulary.itunes.apple.com/rdf/ibooks/vocabulary-extensions-1.0/">
     <metadata xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">
-        <dc:identifier id="BookId"><%= uuid %></dc:identifier>
-        <meta refines="#BookId" property="identifier-type" scheme="onix:codelist5">22</meta>
-        <meta property="dcterms:identifier" id="meta-identifier">BookId</meta>
         <dc:title><%= title %></dc:title>
-        <meta property="dcterms:title" id="meta-title"><%= title %></meta>
+        <dc:identifier id="BookId"><%= uuid %></dc:identifier>
         <dc:language><%= lang || "en" %></dc:language>
-        <meta property="dcterms:language" id="meta-language"><%= lang || "en" %></meta>
-        <meta property="dcterms:modified"><%= (new Date()).toISOString().split(".")[0]+ "Z" %></meta>
         <dc:creator id="creator"><%= author.length ? author.join(",") : author %></dc:creator>
-        <meta refines="#creator" property="file-as"><%= author.length ? author.join(",") : author %></meta>
-        <meta property="dcterms:publisher"><%= publisher || "anonymous" %></meta>
         <dc:publisher><%= publisher || "anonymous" %></dc:publisher>
-        <% var date = new Date(); var year = date.getFullYear(); var month = date.getMonth() + 1; var day = date.getDate(); var stringDate = "" + year + "-" + month + "-" + day; %>
-        <meta property="dcterms:date"><%= stringDate %></meta>
-        <dc:date><%= stringDate %></dc:date>
-        <meta property="dcterms:rights">All rights reserved</meta>
+        <dc:date><%= date.toISOString() %></dc:date>
         <dc:rights>Copyright &#x00A9; <%= (new Date()).getFullYear() %> by <%= publisher || "anonymous" %></dc:rights>
+        <meta property="dcterms:title" id="meta-title"><%= title %></meta>
+        <meta property="dcterms:identifier" id="meta-identifier">BookId</meta>
+        <meta property="dcterms:language" id="meta-language"><%= lang || "en" %></meta>
+        <meta property="dcterms:publisher"><%= publisher || "anonymous" %></meta>
+        <meta property="dcterms:date"><%= date.toISOString() %></meta>
+        <meta property="dcterms:rights">All rights reserved</meta>
+        <meta property="dcterms:modified"><%= (new Date()).toISOString().split(".")[0]+ "Z" %></meta>
         <% if(locals.cover || (locals.firstImageIsCover && images.length)) { %><meta name="cover" content="<%= locals.cover ? 'image_cover' : 'image_0' %>"/><% } %>
         <meta name="generator" content="epub-gen" />
         <meta property="ibooks:specified-fonts">true</meta>
+        <meta refines="#creator" property="file-as"><%= author.length ? author.join(",") : author %></meta>
+        <meta refines="#BookId" property="identifier-type" scheme="onix:codelist5">22</meta><% if (description) { %>
+        <dc:description><%= description %></dc:description><% } %><% if (source) { %>
+        <dc:source id="SourceUrl"><%= source %></dc:source>
+        <meta refines="#SourceUrl" property="identifier-type" scheme="onix:codelist35">1</meta><% } %>
     </metadata>
     <manifest><% if (locals.cover) { %>
         <item id="cover" href="cover.xhtml" media-type="application/xhtml+xml" properties="svg"/><% } %>
@@ -34,7 +36,7 @@
     </manifest>
     <spine><% content.forEach(function(content, index){ %><% if(content.beforeToc && !content.excludeFromToc){ %>
         <itemref idref="content_<%= index %>_<%= content.id %>"/><% } %><% }) %><% if (locals.cover) { %>
-        <itemref idref="cover"/><% } %><% if (locals.showToC) { %>
+        <itemref idref="cover" linear="no" /><% } %><% if (locals.showToC) { %>
         <itemref idref="toc" /><% } %><% content.forEach(function(content, index){ %><% if(!content.beforeToc && !content.excludeFromToc){ %>
         <itemref idref="content_<%= index %>_<%= content.id %>"/><% } %><% }) %>
     </spine>
