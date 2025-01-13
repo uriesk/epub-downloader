@@ -184,6 +184,7 @@ export async function createEpub(parsedContent, options) {
       }
     }
     output = path.join(pathArg, filename);
+    options.output = output;
   }
   const hash = createHash('sha256').update(parsedContent.textContent).digest('hex');
 
@@ -252,6 +253,7 @@ async function fetchAsEpub(options) {
     return false
   }
   cleanup();
+  console.log('Successfully created', options.output);
   return true;
 }
 
