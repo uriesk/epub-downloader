@@ -128,7 +128,12 @@ export async function manipulateDOM(parsedContent, options, purify = true) {
   for (const q of document.querySelectorAll('blockquote')) {
     await checkQuotesForMedia(document, q, options);
   }
-  parsedContent.content = parsedContent.dom.document.body.innerHTML;
+
+  let entryNode = parsedContent.dom.document.body;
+  while (entryNode.childNodes.length === 1 && entryNode.firstChild.nodeName === 'DIV') {
+    entryNode = entryNode.firstChild;
+  }
+  parsedContent.content = entryNode.innerHTML;
   /* 
    * purify html, keep file:// links of media elements
    * cause we might have safed them
