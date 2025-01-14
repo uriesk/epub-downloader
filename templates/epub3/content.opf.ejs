@@ -8,9 +8,9 @@
         <dc:publisher><%= publisher || "anonymous" %></dc:publisher>
         <dc:date><%= date.toISOString() %></dc:date>
         <dc:rights>Copyright &#x00A9; <%= (new Date()).getFullYear() %> by <%= publisher || "anonymous" %></dc:rights>
-        <meta property="dcterms:modified"><%= (new Date()).toISOString().split(".")[0]+ "Z" %></meta>
-        <% if(locals.cover || (locals.firstImageIsCover && images.length)) { %><meta name="cover" content="<%= locals.cover ? 'image_cover' : 'image_0' %>"/><% } %>
-        <meta name="generator" content="epub-gen" />
+        <meta property="dcterms:modified"><%= (new Date()).toISOString().split(".")[0]+ "Z" %></meta><% if(locals.cover || (locals.firstImageIsCover && images.length)) { %>
+        <meta name="cover" content="<%= locals.cover ? 'image_cover' : 'image_0' %>"/><% } %>
+        <meta name="generator" content="epub-gen"/>
         <meta property="ibooks:specified-fonts">true</meta>
         <meta refines="#creator" property="file-as"><%= author.length ? author.join(",") : author %></meta>
         <meta refines="#BookId" property="identifier-type" scheme="onix:codelist5">22</meta><% if (description) { %>
@@ -20,18 +20,24 @@
     </metadata>
     <manifest><% if (locals.cover) { %>
         <item id="cover" href="cover.xhtml" media-type="application/xhtml+xml" properties="svg"/><% } %>
+        <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
         <item id="toc" href="toc.xhtml" media-type="application/xhtml+xml" properties="nav"/>
-        <item id="css" href="style.css" media-type="text/css" /><% if(locals.cover) { %>
-        <item id="image_cover" href="cover.<%= coverExtension %>" media-type="<%= coverMediaType %>" properties="cover-image" /><% } %><% images.forEach(function(image, index){ %>
-        <item id="image_<%= index %>" href="images/<%= image.id %>.<%= image.extension %>" media-type="<%= image.mediaType %>" <% if(index === 0 && !locals.cover && locals.firstImageIsCover){ %>properties="cover-image"<% } %> /><% }) %><% audioVideo.forEach(function(media, index){ %>
-        <item id="media_<%= index %>" href="audiovideo/<%= media.id %>.<%= media.extension %>" media-type="<%= media.mediaType %>" /><% }) %><% content.forEach(function(content, index){ %><% if(!content.isCover){ %>
-        <item id="content_<%= index %>_<%= content.id %>" href="<%= content.href %>" media-type="application/xhtml+xml" /><% } %><% }) %><% fonts.forEach(function(font, index){%>
-        <item id="font_<%= index%>" href="fonts/<%= font %>" media-type="application/x-font-ttf" /><%})%>
+        <item id="css" href="style.css" media-type="text/css"/><% if(locals.cover) { %>
+        <item id="image_cover" href="cover.<%= coverExtension %>" media-type="<%= coverMediaType %>" properties="cover-image"/><% } %><% images.forEach(function(image, index){ %>
+        <item id="image_<%= index %>" href="images/<%= image.id %>.<%= image.extension %>" media-type="<%= image.mediaType %>"<% if(index === 0 && !locals.cover && locals.firstImageIsCover){ %> properties="cover-image"<% } %>/><% }) %><% audioVideo.forEach(function(media, index){ %>
+        <item id="media_<%= index %>" href="audiovideo/<%= media.id %>.<%= media.extension %>" media-type="<%= media.mediaType %>"/><% }) %><% content.forEach(function(content, index){ %><% if(!content.isCover){ %>
+        <item id="content_<%= index %>_<%= content.id %>" href="<%= content.href %>" media-type="application/xhtml+xml"/><% } %><% }) %><% fonts.forEach(function(font, index){%>
+        <item id="font_<%= index%>" href="fonts/<%= font %>" media-type="application/x-font-ttf"/><%})%>
     </manifest>
-    <spine><% content.forEach(function(content, index){ %><% if(content.beforeToc && !content.excludeFromToc){ %>
+    <spine toc="ncx"><% content.forEach(function(content, index){ %><% if(content.beforeToc && !content.excludeFromToc){ %>
         <itemref idref="content_<%= index %>_<%= content.id %>"/><% } %><% }) %><% if (locals.cover) { %>
-        <itemref idref="cover" linear="no" /><% } %><% if (locals.showToC) { %>
-        <itemref idref="toc" /><% } %><% content.forEach(function(content, index){ %><% if(!content.beforeToc && !content.excludeFromToc){ %>
+        <itemref idref="cover" linear="no"/><% } %><% if (locals.showToC) { %>
+        <itemref idref="toc"/><% } %><% content.forEach(function(content, index){ %><% if(!content.beforeToc && !content.excludeFromToc){ %>
         <itemref idref="content_<%= index %>_<%= content.id %>"/><% } %><% }) %>
     </spine>
+    <guide><% if (locals.cover) { %>
+      <reference type="cover" title="Cover" href="cover.xhtml"/><% } %><% if (locals.showToC) { %>
+      <reference type="toc" title="Table of Content" href="toc.xhtml"/><% } %>
+      <reference type="text" title="Start of Content" href="<%= content.find((c) => !c.excludeFromToc).href %>"/>
+    </guide>
 </package>

@@ -1,8 +1,8 @@
 <%= docHeader %>
 <head>
-    <meta charset="UTF-8" />
+    <meta charset="UTF-8"/>
     <title><%= encodeXML(title || "") %></title>
-    <link rel="stylesheet" type="text/css" href="style.css" />
+    <link rel="stylesheet" type="text/css" href="style.css"/>
 </head>
 <body<% if (type) { %> epub:type="<%= type %>" <% } %>><% if (title && appendChapterTitles) { %>
     <h1><%= encodeXML(title) %></h1><% } %><% if (title && author && author.length) { %>

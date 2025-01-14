@@ -373,13 +373,12 @@ export class EPub {
       throw new Error("Custom file to OPF template not found.");
     }
     writeFileSync(path.resolve(this.tempEpubDir, "./OEBPS/content.opf"), await renderFile(opfPath, this));
-    if (this.version === 2) {
-      const ncxTocPath = this.customNcxTocTemplatePath || path.resolve(__dirname, "../templates/epub2/toc.ncx.ejs");
-      if (!existsSync(ncxTocPath)) {
-        throw new Error("Custom file the NCX toc template not found.");
-      }
-      writeFileSync(path.resolve(this.tempEpubDir, "./OEBPS/toc.ncx"), await renderFile(ncxTocPath, this));
+    /* toc.ncx is epub2 only, but it doesn't harm to add it to epub3 as well, for compatibility */
+    const ncxTocPath = this.customNcxTocTemplatePath || path.resolve(__dirname, "../templates/epub2/toc.ncx.ejs");
+    if (!existsSync(ncxTocPath)) {
+      throw new Error("Custom file the NCX toc template not found.");
     }
+    writeFileSync(path.resolve(this.tempEpubDir, "./OEBPS/toc.ncx"), await renderFile(ncxTocPath, this));
     const htmlTocPath = this.customHtmlTocTemplatePath || path.resolve(__dirname, `../templates/epub${this.version}/toc.xhtml.ejs`);
     if (!existsSync(htmlTocPath)) {
       throw new Error("Custom file to HTML toc template not found.");
