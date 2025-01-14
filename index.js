@@ -43,7 +43,6 @@ async function replaceIFrame(document, frame, options) {
     );
     const type = filepath.endsWith('.mp4') ? 'video' : 'audio';
     const media = document.createElement(type);
-    media.style.maxWidth = '100%';
     media.src = filepath;
     media.appendChild(document.createTextNode(`There is ${type} content at this location that is not currently supported on your device.`));
     media.setAttribute("controls","controls");
@@ -85,7 +84,6 @@ async function checkQuotesForMedia(document, quote, options) {
     const type = filepath.endsWith('.mp4') ? 'video' : 'audio';
     const media = document.createElement(type);
     const p = document.createElement('p');
-    media.style.maxWidth = '100%';
     media.src = filepath;
     media.setAttribute("controls","controls");
     p.appendChild(media);

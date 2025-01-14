@@ -28,6 +28,10 @@ hr {
 	margin: 60px 10%;
 }
 
+img, audio, video {
+	max-width: 100%;
+}
+
 /* Cover page */
 
 body.cover {
