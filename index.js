@@ -7,110 +7,40 @@ import { Readability } from '@mozilla/readability';
 import { JSDOM } from 'jsdom';
 import DOMPurify from 'dompurify';
 
-import getMedia from './src/yt-dlp.js';
 import { EPub } from './src/html-to-epub.js';
 import {
   getHostOfUrl,
   uuid,
   slug,
   fixZip,
-}from './src/utils.js';
+} from './src/utils.js';
+import {
+  prepareDomForReadability, prepareDomForEpub,
+} from './src/dom_filters.js';
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 
-async function replaceIFrame(document, frame, options) {
-  const tempFolder = options.tempInstanceDir;
-  const src = frame.src;
-  const host = getHostOfUrl(src);
-  let node = frame;
-  /* go to outermost node that has a different sibling */
-  while (node.parentNode.childNodes.length <= 1) {
-    node = node.parentNode;
-  }
-
-  let replacement;
-  const a = document.createElement('a');
-  a.href = src;
-  if (options.downloadMedia && ['youtube', 'youtu.be'].includes(host)) {
-    a.appendChild(document.createTextNode(`Watch on ${host}.`));
-    replacement = document.createElement('figure');
-    const preferedFormats = ['worstvideo[vcodec!*=av01][height>=?420]+bestaudio[acodec!*=opus][abr<120]','worstvideo[vcodec!*=av01][height>=?360]+bestaudio[acodec!*=opus][abr<120]', 'worstvideo+worstaudio'];
-    const filepath = await getMedia(
-      src,
-      tempFolder,
-      (options.mediaFormat && options.mediaFormat.split('_')) || preferedFormats, 
-      options.targetFileSize,
-    );
-    const type = filepath.endsWith('.mp4') ? 'video' : 'audio';
-    const media = document.createElement(type);
-    media.src = filepath;
-    media.appendChild(document.createTextNode(`There is ${type} content at this location that is not currently supported on your device.`));
-    media.setAttribute("controls","controls");
-    replacement.appendChild(media);
-    const caption = document.createElement('figcaption');
-    caption.appendChild(a);
-    replacement.appendChild(caption);
-  } else {
-    a.appendChild(document.createTextNode(`Visit ${host}.`));
-    replacement = document.createElement('p');
-    replacement.appendChild(a);
-  }
-  node.parentNode.replaceChild(replacement, node);
-}
-
-async function checkQuotesForMedia(document, quote, options) {
-  const tempFolder = options.tempInstanceDir;
-  let lastChild;
-  if (!options.downloadMedia
-    || !quote.parentNode
-    ||quote.lastChild?.tagName !== 'P'
-    || quote.lastChild.lastChild?.tagName !== 'A'
-  ) {
-    return;
-  }
-  const url = quote.lastChild.lastChild.href;
-  if (getHostOfUrl(url) !== 'twitter') {
-    return;
-  }
-  /* we don't know if the tweet includes a video, we just try */
-  try {
-    const preferedFormats = ['worstvideo[vcodec!*=av01][height>=?420]+bestaudio[abr<120]', 'worstvideo+worstaudio', 'bestaudio[abr<120]'];
-    const filepath = await getMedia(
-      url,
-      tempFolder,
-      (options.mediaFormat && options.mediaFormat.split('_')) || preferedFormats,
-      options.targetFileSize,
-    );
-    const type = filepath.endsWith('.mp4') ? 'video' : 'audio';
-    const media = document.createElement(type);
-    const p = document.createElement('p');
-    media.src = filepath;
-    media.setAttribute("controls","controls");
-    p.appendChild(media);
-    if (quote.nextSibling) {
-      quote.parentNode.insertBefore(p, quote.nextSibling);
-    } else {
-      quote.parentNode.appendChild(p);
-    }
-  } catch (err) {
-    console.log(err.message);
-    return;
-  }
-}
-
-export async function getDOM(url) {
+export async function getDOM(options) {
+  const url = options.url;
   if (!url) {
     throw new Error('No URL given');
   }
   console.log('Fetching website.');
-  let html = await fetch(url).then((r) => r.text());
+  let html = await fetch(url, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/84.0.4147.105 Safari/537.36',
+    },
+  }).then((r) => r.text());
   let window
   /* create DOM */
-  window = new JSDOM(html, {url}).window;
+  window = new JSDOM(html, {url, pretendToBeVisual: true}).window;
+  /* modify before readability */
+  await prepareDomForReadability(window.document, options);
   /* parse with readability */
   console.log('Parsing website in reader mode');
   const reader = new Readability(window.document);
   const parsedContent = reader.parse();
+  // console.log(parsedContent.content);
   parsedContent.dom = new JSDOM(parsedContent.content, {url}).window;
   return parsedContent;
 }
@@ -118,15 +48,9 @@ export async function getDOM(url) {
 export async function manipulateDOM(parsedContent, options, purify = true) {
   console.log('Checking embedded content.');
   const document = parsedContent.dom.document;
-  /* remove iframes */
-  for (const f of document.querySelectorAll('iframe')) {
-    await replaceIFrame(document, f, options);
-  }
-  /* get videos from twitter blockquotes */
-  for (const q of document.querySelectorAll('blockquote')) {
-    await checkQuotesForMedia(document, q, options);
-  }
-
+  /* modify before epub saving */
+  await prepareDomForEpub(document, options);
+  /* get reasonable entry point for epub content */
   let entryNode = parsedContent.dom.document.body;
   while (entryNode.childNodes.length === 1 && entryNode.firstChild.nodeName === 'DIV') {
     entryNode = entryNode.firstChild;
@@ -134,7 +58,7 @@ export async function manipulateDOM(parsedContent, options, purify = true) {
   parsedContent.content = entryNode.innerHTML;
   /* 
    * purify html, keep file:// links of media elements
-   * cause we might have safed them
+   * cause we might have saved them
    * */
   if (purify) {
     const url = parsedContent.dom.document.location.href;
@@ -242,13 +166,9 @@ async function fetchAsEpub(options) {
   });
 
   try {
-    let parsedContent = await getDOM(options.url);
+    let parsedContent = await getDOM(options);
     parsedContent = await manipulateDOM(parsedContent, options);
     const filepath = await createEpub(parsedContent, options);
-    /* fixZip uses the zip shell utility to rewrite the file
-      * it can be useful when the node zipping out is questionable
-      */
-    // await fixZip(filepath, options.tempInstanceDir).catch(() =>{});
   } catch (err) {
     console.error(err.message);
     cleanup();

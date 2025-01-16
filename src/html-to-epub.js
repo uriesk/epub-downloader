@@ -257,12 +257,15 @@ export class EPub {
             }
             else {
               id = uuid();
-              const mediaType = mime.getType(url.replace(/\?.*/, ""));
+              let mediaType = mime.getType(url.replace(/\?.*/, ""));
               if (mediaType === null) {
-                if (this.verbose) {
-                  console.error("[Image Error]", `The media can't be processed : ${url}`);
+                mediaType = mime.getType(url);
+                if (mediaType === null) {
+                  if (this.verbose) {
+                    console.error("[Image Error]", `The media can't be processed : ${url}`);
+                  }
+                  return;
                 }
-                return;
               }
               extension = mime.getExtension(mediaType);
               if (extension === null) {
