@@ -134,7 +134,7 @@ async function chooseSourceOfMedia(document, p, typePriority) {
         }
       }
     } else if (s.tagName) {
-      return;
+      return {};
     }
   }
   if (chosenSource) {
@@ -143,7 +143,7 @@ async function chooseSourceOfMedia(document, p, typePriority) {
       alt: altText,
     }
   }
-  return null;
+  return {};
 }
 
 /*
@@ -154,12 +154,14 @@ async function chooseSourceOfPictures(document) {
   const typePriority = ['image/png', 'image/jpeg', 'image/webp', 'image/jxl', 'image/avif'];
   for (const p of document.querySelectorAll('picture')) {
     const { src, alt } = await chooseSourceOfMedia(document, p, typePriority);
-    const img = document.createElement('img');
-    img.src = src;
-    if (alt) {
-      img.alt = alt;
+    if (src) {
+      const img = document.createElement('img');
+      img.src = src;
+      if (alt) {
+        img.alt = alt;
+      }
+      p.parentNode.replaceChild(img, p);
     }
-    p.parentNode.replaceChild(img, p);
   }
 }
 
@@ -170,14 +172,16 @@ async function chooseSourceOfVideos(document) {
   for (const p of document.querySelectorAll('video')) {
     if (!p.src) {
       const { src } = await chooseSourceOfMedia(document, p, []);
-      const media = document.createElement('video');
-      media.src = src;
-      media.appendChild(document.createTextNode('There is video content at this location that is not currently supported on your device.'));
-      media.setAttribute("controls","controls");
-      if (p.title) {
-        media.title = p.title;
+      if (src) {
+        const media = document.createElement('video');
+        media.src = src;
+        media.appendChild(document.createTextNode('There is video content at this location that is not currently supported on your device.'));
+        media.setAttribute("controls","controls");
+        if (p.title) {
+          media.title = p.title;
+        }
+        p.parentNode.replaceChild(media, p);
       }
-      p.parentNode.replaceChild(media, p);
     }
   }
 }
