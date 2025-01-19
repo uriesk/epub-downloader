@@ -33,6 +33,7 @@ export async function getDOM(options) {
   }).then((r) => r.text());
   let window
   /* create DOM */
+  // window = new JSDOM(html, {url, pretendToBeVisual: true, runScripts: "dangerously" }).window;
   window = new JSDOM(html, {url, pretendToBeVisual: true}).window;
   /* modify before readability */
   await prepareDomForReadability(window.document, options);

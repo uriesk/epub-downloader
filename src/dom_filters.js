@@ -101,7 +101,7 @@ async function chooseSourceOfMedia(document, p, typePriority) {
   for (const s of p.childNodes) {
     if (s.tagName === 'IMG' && p.tagName === 'PICTURE') {
       altText = s.alt;
-      if (s.src) {
+      if (s.src && !s.src.startsWith('data:')) {
         chosenSource = s.src;
         break;
       }
@@ -109,11 +109,21 @@ async function chooseSourceOfMedia(document, p, typePriority) {
       if ((s.srcset || s.src) && !chosenSource || typePriority.indexOf(s.type) < typePriority.indexOf(chosenType)) {
         chosenType = s.type;
         chosenSize = 0;
-        const sources = s.src || s.srcset;
+        let sources = s.src;
+        if (!sources || sources.startsWith('data:')) {
+          sources = s.srcset;
+        }
+        if (!sources || sources.startsWith('data:')) {
+          sources = s.getAttribute('data-srcset');
+        }
+        if (!sources || sources.startsWith('data:')) {
+          continue;
+        }
+
         for (const ss of sources.split(',')) {
           let srcstr = ss.trim();
           if (srcstr.includes('.m3u8')) {
-            continue
+            continue;
           }
           let size;
           const space = srcstr.indexOf(' ');
