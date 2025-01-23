@@ -41,12 +41,18 @@ async function replaceIFrame(document, frame, options) {
   node.parentNode.replaceChild(replacement, node);
 }
 
+/*
+ * check iframes for videos like youtube
+ */
 async function replaceIFrames(document, options) {
   for (const f of document.querySelectorAll('iframe')) {
     await replaceIFrame(document, f, options);
   }
 }
 
+/*
+ * check twitter quotes for included videos
+ */
 async function checkQuoteForMedia(document, quote, options) {
   const tempFolder = options.tempInstanceDir;
   let lastChild;
@@ -196,9 +202,45 @@ async function chooseSourceOfVideos(document) {
   }
 }
 
+/*
+  * BBC placeholders that are only white
+  */
+async function removePlaceholderOfImages(document) {
+  for (const p of document.querySelectorAll('figure')) {
+    const images = p.querySelectorAll('img');
+    if (images.length !== 2) {
+      return;
+    }
+    let placeholder;
+    let image;
+    for (const i of images) {
+      if (i.alt.includes('placeholder') || i.src.includes('placeholder')) {
+        if (placeholder) {
+          return;
+        }
+        placeholder = i;
+      } else {
+        image = i;
+      }
+    }
+    placeholder?.remove();
+    /*
+     * if there is a span sibling, replace it with a p,
+     * for BBC
+     */
+    const sibling = image.nextElementSibling;
+    if (sibling?.tagName === 'SPAN') {
+      const p = document.createElement('p');
+      p.appendChild(document.createTextNode(sibling.textContent));
+      sibling.parentNode.replaceChild(p, sibling);
+    }
+  }
+}
+
 export async function prepareDomForReadability(document, options) {
   await chooseSourceOfPictures(document, options);
   await chooseSourceOfVideos(document, options);
+  await removePlaceholderOfImages(document, options);
 }
 
 export async function prepareDomForEpub(document, options) {
