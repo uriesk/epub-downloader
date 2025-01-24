@@ -79,23 +79,6 @@ export default class YTDlpWrap {
     });
   }
 
-  static async downloadFromGithub(filePath, version, platform = os.platform()) {
-    const isWin32 = platform == 'win32';
-    const fileName = `${executableName}${isWin32 ? '.exe' : ''}`;
-    if (!version) {
-      version = (await YTDlpWrap.getGithubReleases(1, 1))[0].tag_name;
-    }
-    if (!filePath) {
-      filePath = './' + fileName;
-    }
-    let fileURL = 'https://github.com/yt-dlp/yt-dlp/releases/download/' +
-      version +
-      '/' +
-      fileName;
-    await YTDlpWrap.downloadFile(fileURL, filePath);
-    !isWin32 && fs.chmodSync(filePath, '777');
-  }
-
   exec(ytDlpArguments = [], options = {}, abortSignal = null) {
     options = YTDlpWrap.setDefaultOptions(options);
     const execEventEmitter = new EventEmitter();

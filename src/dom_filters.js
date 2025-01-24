@@ -64,7 +64,8 @@ async function checkQuoteForMedia(document, quote, options) {
     return;
   }
   const url = quote.lastChild.lastChild.href;
-  if (getHostOfUrl(url) !== 'twitter') {
+  const host = getHostOfUrl(url);
+  if (host !== 'twitter' && host !== 'x') {
     return;
   }
   /* we don't know if the tweet includes a video, we just try */
@@ -112,7 +113,7 @@ async function chooseSourceOfMedia(document, p, typePriority) {
         break;
       }
     } else if (s.tagName === 'SOURCE') {
-      if ((s.srcset || s.src) && !chosenSource || typePriority.indexOf(s.type) < typePriority.indexOf(chosenType)) {
+      if ((s.srcset || s.src || s.getAttribute('data-srcset')) && !chosenSource || typePriority.indexOf(s.type) < typePriority.indexOf(chosenType)) {
         chosenType = s.type;
         chosenSize = 0;
         let sources = s.src;
@@ -237,8 +238,18 @@ async function removePlaceholderOfImages(document) {
   }
 }
 
+/*
+ * strange image-wrapper divs that include a content setting script
+ */
+async function fixNymagImageWrappers(document) {
+  for (const p of document.querySelectorAll('.mediaplay-image > .image-wrapper > img')) {
+    p.parentNode.parentNode.parentNode.replaceChild(p, p.parentNode.parentNode)
+  }
+}
+
 export async function prepareDomForReadability(document, options) {
   await chooseSourceOfPictures(document, options);
+  await fixNymagImageWrappers(document, options);
   await chooseSourceOfVideos(document, options);
   await removePlaceholderOfImages(document, options);
 }
