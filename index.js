@@ -156,7 +156,9 @@ async function fetchAsEpub(options) {
     fs.mkdirSync(options.tempInstanceDir);
   }
   const cleanup = () => {
-    fs.rmSync(options.tempInstanceDir, { recursive: true, force: true });
+    if (fs.existsSync(options.tempInstanceDir)) {
+      fs.rmSync(options.tempInstanceDir, { recursive: true, force: true });
+    }
     if (createdTempDir) {
       fs.rmSync(options.tempDir, { recursive: true, force: true });
     }
@@ -177,9 +179,8 @@ async function fetchAsEpub(options) {
     parsedContent = await manipulateDOM(parsedContent, options);
     const filepath = await createEpub(parsedContent, options);
   } catch (err) {
-    console.error(err.message);
     cleanup();
-    return false
+    throw err;
   }
   cleanup();
   console.log('Successfully created', options.output);

@@ -5,7 +5,4 @@ import getArgsFromCli from './src/parse-args.js';
 
 const options = getArgsFromCli();
 
-fetchAsEpub(options).catch((err) => {
-  console.error(err.message);
-  process.exit(255);
-});
+fetchAsEpub(options);

@@ -482,7 +482,7 @@ export class EPub {
 
       for (const file of files) {
         const filename = file.name;
-        const filepath = path.resolve(file.path, file.name);
+        const filepath = path.join(dir, file.name);
         if (file.isDirectory()) {
           appendDirectory(filepath, zip.folder(filename));
         } else {
