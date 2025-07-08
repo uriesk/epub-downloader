@@ -1,5 +1,6 @@
 import path from 'path'
 import fs from 'fs';
+import os from 'os';
 import { createHash } from 'crypto'
 import { fileURLToPath } from "url";
 
@@ -143,10 +144,12 @@ async function fetchAsEpub(options) {
     return false;
   }
   if (!options.tempDir) {
-    options.tempDir = path.resolve(__dirname, 'tmp');
+    options.tempDir = path.resolve(os.tmpdir(), 'epubdownloader');
   }
+  let createdTempDir = false;
   if (!fs.existsSync(options.tempDir)) {
     fs.mkdirSync(options.tempDir);
+    createdTempDir = true;
   }
   options.tempInstanceDir = path.resolve(options.tempDir, uuid());
   if (!fs.existsSync(options.tempInstanceDir)) {
@@ -154,6 +157,9 @@ async function fetchAsEpub(options) {
   }
   const cleanup = () => {
     fs.rmSync(options.tempInstanceDir, { recursive: true, force: true });
+    if (createdTempDir) {
+      fs.rmSync(options.tempDir, { recursive: true, force: true });
+    }
   };
   process.on('SIGINT', () => {
     console.log('Cleaning up...');
